@@ -10,16 +10,15 @@
 ;;; The Canonical Resources
 ;; http://de.wikipedia.org/wiki/Parser
 ;; http://en.wikipedia.org/wiki/Parsing
+;; https://github.com/Engelberg/instaparse
 
 
 ;;; Description
 ;; Lexical analysis (tokenization)
 ;; Syntactic analysis (parse-tree)
-
 ;; Startsymbol + production rules
 ;; Terminal and non-terminal symbols
 ;; Context-free grammar (on left side only non-terminals)
-
 
 
 ;;; Different Types
@@ -31,7 +30,7 @@
 ;; Yacc, ANTLR, Bison, uvm
 
 
-;;; GLL Parsing
+;;; GLL Parsing (Generalized LL)
 ;; Instaparse
 ;; http://dotat.at/tmp/gll.pdf
 ;; http://www.codecommit.com/blog/scala/unveiling-the-mysteries-of-gll-part-1
@@ -54,6 +53,10 @@
 ;; better: Spaß rhymes with parse pretty well. 
 (def talk-title "Instant Spaß mit Instaparse.")
 
+;; Sequences of symbols
+;; Literal strings
+;; *: zero or more
+;; Regexps (mind your quotes)
 (def title-grammar-1
   "sentence = words DOT
    DOT      = '.'
@@ -68,6 +71,10 @@
 (defn test-title-parser [grammar]
   ((i/parser grammar) talk-title))
 
+;; C-c C-p or run in REPL
+(comment
+  (test-title-parser title-grammar-1))
+
 ;; Output has too much information 
 ;; <> come to the rescue and suppress the dot
 ;; Go ahead, test it at the REPL
@@ -78,6 +85,9 @@
    SPACE    = ' '
    word     = #'(?U)\\w+'")
 
+(comment
+  (test-title-parser title-grammar-2))
+
 ;; What happens with < and > on the left hand side?
 (def title-grammar-3
   "sentence = words DOT
@@ -85,6 +95,9 @@
    words    = word (SPACE word)*
    SPACE    = ' '
    <word>   = #'(?U)\\w+'")
+
+(comment
+  (test-title-parser title-grammar-3))
 
 ;; and what about both sides?
 (def title-grammar-4
@@ -94,6 +107,8 @@
    <SPACE>  = <' '>
    <word>   = #'(?U)\\w+'")
 
+(comment
+  (test-title-parser title-grammar-4))
 
 ;;; And Now For Some Real-World Data
 
@@ -105,6 +120,12 @@
 
 ;; Simplified grammar based upon
 ;; http://www.robots.ox.ac.uk/~spline/cddb-howto.txt
+;; Note the | to indicate alternatives
+;; + is one or more
+;; There is a difference regarding greedyness for 
+;; - instaparse grammar
+;; - and regexps.
+;; Test by transposing + and ' in name
 (def cddb-grammar
   "start     = line+
    line      = (comment | discdata) EOL
@@ -118,6 +139,10 @@
 (defn test-cddb-parser [grammar]
   ((i/parser grammar) cddb-example))
 
+(comment
+  (i/parser cddb-grammar)
+  (test-cddb-parser cddb-grammar))
+
 ;; Again, clean up a little
 (def cddb-grammar-clean
   "<start>   = line+
@@ -129,6 +154,8 @@
    <name>    = #'[A-Z0-9]+'
    <data>    = #'[\\x20-\\x7eh\\xA0h-\\xFFh]*'")
 
+(comment
+  (test-cddb-parser cddb-grammar-clean))
 ;;; Transform
 
 ;; Instaparse allows transformation of the results on-the-fly
@@ -148,22 +175,33 @@
 (defn discdata->map [name data]
   {(keyword name) data})
 
+(comment
+  (discdata->map "the-name" "the-data"))
+
 ;; & collects all args in a list
 (defn merge-lines [& all-lines]
   (into {} all-lines))
 
+(comment
+  (merge-lines [:k1 "v1"] [:k2 "v2"]))
+
+;; Transformation map triggers on keys
+(def cddb-transform-map
+  {:discdata discdata->map
+   :start    merge-lines})
 ;; This is the same parser as in the previous example
 ;;   but we use ->> for convenience
-;; Why do we need the extra pair of parens?
-;; Why ->> and not ->?
+;; Note the extra pair of parens
+;; Difference ->> and ->
 ;; Transformation step is last
-(defn test-clean-cddb-reader [grammar]
+(defn test-cddb-transform [grammar]
   (->> "resources/data/cddb.710b2b08"
        slurp
        ((i/parser grammar))
-       (i/transform {:discdata discdata->map
-                     :start    merge-lines})))
+       (i/transform cddb-transform-map)))
 
+(comment
+  (test-cddb-transform cddb-grammar-transform))
 
 
 ;;; PGN Chess
@@ -173,7 +211,8 @@
 (def magnus-carlsen-pgn 
   (slurp "resources/data/carlsen.pgn"))
 
-;; This simplifies the grammar of a move.  See e.g.
+;; Gloss over some details of the grammar of a move.  
+;; See e.g.
 ;; http://pyparsing.wikispaces.com/file/view/pgn.py/30112820/pgn.py
 ;; for a parser in Python which deals with the various forms of a
 ;; move.
@@ -220,21 +259,29 @@ Unknown   = <'*'>
             :output-format :enlive)
    magnus-carlsen-pgn))
 
+(comment
+  (read-pgn-database))
+
+;; Enlive tree can be converted to XML directly
 (defn pgn->xml []
   (binding [*out* (java.io.FileWriter. "/tmp/pgn.xml")]
     (xml/emit (read-pgn-database))))
+
+(comment
+  (pgn->xml))
 ;; Let's open that file ...
 ;; Or use the shell: xmlindent /tmp/pgn.xml | less
 
 
 
 
-;;; Apache
+;;; Last Example: Apache
 
-;; Very simplified Apache log
+;; Reduced Apache log with just two fields: IP, timestamp
 ;; Would read a sequence of lines from a file with line-seq
 ;; This kind of file is too large for Instaparse
 ;; Just parse each line with Instaparse
+;; Pretend to have a line-seq with a vector here
 (def apache-log
   ["10.10.30.56 [21/Jul/2014:01:10:25 +0200]"
    "10.10.30.56 [21/Jul/2014:01:10:25 +0200]"
@@ -242,7 +289,7 @@ Unknown   = <'*'>
    "10.10.30.78 [21/Jul/2014:14:39:43 +0200]"
    "10.10.30.78 [22/Jul/2014:14:01:08 +0200]"])
 
-;; Start with a simplified grammar for an IP address
+;; A grammar just for an IP address
 (def grammar-ip 
   "ip   = n d n d n d n
     <n> = #'[0-9]+'
@@ -251,7 +298,6 @@ Unknown   = <'*'>
   ((i/parser grammar-ip) "10.10.30.78"))
 
 ;; And here is a grammar for the timestamp
-;; Sure, that's simplified as well
 (def grammar-date
   "datetime = <'['> date <':'> time <' '> tz <']'>
    date  = #'\\d+/\\w+/\\d+'
@@ -259,10 +305,6 @@ Unknown   = <'*'>
    tz    = #'[+-]\\d+'")
 (comment
   ((i/parser grammar-date) "[22/Jul/2014:14:01:08 +0200]"))
-;; There is a difference regarding greedyness for 
-;; - instaparse grammar
-;; - and regexps.
-;; So, no worries about the colon.
 
 ;; Now leverage the combinator library of Instaparse
 ;;   instaparse.combinators
@@ -272,6 +314,10 @@ Unknown   = <'*'>
 
 ;; Result of ebnf is just a hash map
 ;; Can be combined as usual
+;; Create a map for :log which combines the others programmatically
+;; c/cat: concat
+;; c/nt: non-terminal
+;; c/string: guess what...
 (def combined
   (merge
    {:log (c/cat (c/nt :ip) (c/string " ") (c/nt :datetime))}
@@ -297,20 +343,22 @@ Unknown   = <'*'>
 
 ;; Need a parser for the LogFormat
 (def grammar-log-def
-  "fmt = <'LogFormat '> quote declaration quote
+  "<fmt>       = <'LogFormat '> quote declaration quote
    <quote>     = <'\"'>
-   declaration = (char+ | fmtstr)+
+   <declaration> = (char+ | fmtstr)+
    char        = #'[\\w ]+'
-   <fmtstr>    = time | ip
+   <fmtstr>    = datetime | ip
    ip          = <'%a'>
-   time        = <'%t'>")
+   datetime    = <'%t'>")
 
 (defn parse-format-def [fmt-def]
   ((i/parser grammar-log-def) fmt-def))
 
 (comment 
   (parse-format-def apache-log-def))
-
+;; Our plan is to translate this into a grammar which can parse a
+;; line of log output.
+;; Need to create the grammar for the line and add all required NT.
 
 ;; Multi Method with first as dispatch function
 (defmulti log-decl->grammar first)
@@ -319,49 +367,61 @@ Unknown   = <'*'>
   [x]
   (c/ebnf grammar-ip))
 
-(defmethod log-decl->grammar :time
+(defmethod log-decl->grammar :datetime
   [x]
   (c/ebnf grammar-date))
 
 (defmethod log-decl->grammar :char
   [x]
-  (c/string (second x)))
+  nil)
 
 (comment
  (log-decl->grammar [:ip])
  (log-decl->grammar [:char " "]))
 
 ;; Need some helper methods
-(defn key-or-string 
-  "Re-use strings as-is, and make others a non-terminal."
+
+(defn nt-or-string 
+  "Translates [:char ...] to string grammar and others to NTs."
+  [item]
+  (if (= :char (first item))
+    (c/string (second item))
+    (c/nt (first item))))
+
+(defn line-grammar 
+  "Creates a map with the concatenated grammar items for one line."
   [decls]
-  (map (fn [x] 
-         (if (= :tag (key (first x))) 
-           x 
-           (c/nt (key (first x))))) 
-       decls))
+  {:line
+   (apply c/cat (map nt-or-string decls))})
 
-
-(defn nt-decls 
-  "Get only the non terminal declarations."
+(defn nt-grammars 
+  "Creates a map with all NTs required to parse a all items in DECLS."
   [decls]
-  (filter
-   (complement
-     #(= :tag (key (first %)))) decls ))
+  ;; merge gets rid of all nils from :char decls
+  (apply merge (map log-decl->grammar decls)))
 
-(defn make-log-parser [& args]
-  (let [decls (map log-decl->grammar args)
-        line  (apply c/cat (key-or-string decls))
-        gram  (nt-decls decls)]
-    (i/parser (merge 
-               {:line line}
-               (into {} gram))
-              :start :line)))
+(defn declaration->parser [decls]
+  (i/parser
+   (merge (line-grammar decls)
+          (nt-grammars decls))
+   :start :line))
 
 (defn logdef->parser [logdef]
-  (second
-   (i/transform {:declaration make-log-parser}
-                (parse-format-def logdef))))
+  (-> logdef
+      parse-format-def
+      declaration->parser))
+
+(comment
+  ;; Now, we can create a parser from the LogFormat
+  (logdef->parser apache-log-def)
+  ;; We can use the parser on a line
+  ((logdef->parser apache-log-def) (first apache-log))
+  ;; ... or on a line-seq
+  (map (logdef->parser apache-log-def) 
+       apache-log))
+
+;; ... now, go ahead and create that OSS library.
+
 
 ;;; Closing Notes
 ;; Quantifiers in regexps are greedy; in grammars they consume all
@@ -369,12 +429,14 @@ Unknown   = <'*'>
 ;;   ambiguous.
 ;; Ambiguous grammars can be analyzed with i/parses.
 ;;
-;; Try to make your grammar non-ambigous.  Performance penalties ahead.
+;; Try to make your grammar non-ambigous.
+;;   Performance penalties ahead.
 ;;
 ;; Too many non-terminals in the grammar are bad for
-;;   performance, too 
+;;   performance, too.
 ;; 
-;; Some PEG extensions are supported
+;; Some PEG extensions are supported.
+;; http://en.wikipedia.org/wiki/Parsing_expression_grammar
 ;;
 ;; Partial parses that do not consume the complete input string are
 ;; supported.
