@@ -38,8 +38,8 @@
 
 
 
-;;; ... but you probably know the theory better than me anyway
-;; so let's focus on using Instaparse
+;;; let's focus on actually using Instaparse
+
 
 
 ;;; 2014
@@ -75,6 +75,8 @@
 (comment
   (test-title-parser title-grammar-1))
 
+
+;;; Cleanup No. 1
 ;; Output has too much information 
 ;; <> come to the rescue and suppress the dot
 ;; Go ahead, test it at the REPL
@@ -88,6 +90,7 @@
 (comment
   (test-title-parser title-grammar-2))
 
+;;; Cleanup No. 2
 ;; What happens with < and > on the left hand side?
 (def title-grammar-3
   "sentence = words DOT
@@ -99,6 +102,8 @@
 (comment
   (test-title-parser title-grammar-3))
 
+
+;;; Cleanup Final
 ;; and what about both sides?
 (def title-grammar-4
   "sentence = words DOT
@@ -110,15 +115,23 @@
 (comment
   (test-title-parser title-grammar-4))
 
+
+
 ;;; And Now For Some Real-World Data
+
 
 ;;; CDDB
 
-;; An example
+
+;;; An example
 (def cddb-example
   (slurp "resources/data/cddb.710b2b08"))
 
-;; Simplified grammar based upon
+(comment
+  (print cddb-example))
+
+
+;;; Simplified grammar based upon
 ;; http://www.robots.ox.ac.uk/~spline/cddb-howto.txt
 ;; Note the | to indicate alternatives
 ;; + is one or more
@@ -140,12 +153,16 @@
   ((i/parser grammar) cddb-example))
 
 (comment
+  ;; Hey, how does a parser look like?
   (i/parser cddb-grammar)
-  (test-cddb-parser cddb-grammar))
+  ;; And does this one work?
+  (test-cddb-parser cddb-grammar)
+  ;; Oh man, that is just too much information!
+  )
 
 ;; Again, clean up a little
 (def cddb-grammar-clean
-  "<start>   = line+
+  "start     = line+
    <line>    = (comment | discdata) EOL
    <EOL>     = <'\n'> | <'\r\n'>
    <comment> = <#'^#.*'>
@@ -156,20 +173,14 @@
 
 (comment
   (test-cddb-parser cddb-grammar-clean))
+
+;; Save a parser for later
+(def cddb-parser 
+  (i/parser cddb-grammar-clean))
+
 ;;; Transform
 
 ;; Instaparse allows transformation of the results on-the-fly
-
-;; Take start back in
-(def cddb-grammar-transform
-  "start     = line+
-   <line>    = (comment | discdata) EOL
-   <EOL>     = <'\n'> | <'\r\n'>
-   <comment> = <#'^#.*'>
-   discdata  = name EQ data
-   <EQ>      = <'='>
-   <name>    = #'[A-Z0-9]+'
-   <data>    = #'[\\x20-\\x7eh\\xA0h-\\xFFh]*'")
 
 ;; Turn key value pair into hash map
 (defn discdata->map [name data]
@@ -183,34 +194,43 @@
   (into {} all-lines))
 
 (comment
-  (merge-lines [:k1 "v1"] [:k2 "v2"]))
+  (merge-lines [:k1 "v1"] nil [:k2 "v2"]))
 
 ;; Transformation map triggers on keys
 (def cddb-transform-map
   {:discdata discdata->map
    :start    merge-lines})
-;; This is the same parser as in the previous example
-;;   but we use ->> for convenience
-;; Note the extra pair of parens
-;; Difference ->> and ->
-;; Transformation step is last
-(defn test-cddb-transform [grammar]
-  (->> "resources/data/cddb.710b2b08"
-       slurp
-       ((i/parser grammar))
-       (i/transform cddb-transform-map)))
+
+;;; Transformation of the parsing result 
+;; Uses the parser saved earlier
+;; Transformation step is last: takes parsing result and
+;;   transformation map for each NT.
 
 (comment
-  (test-cddb-transform cddb-grammar-transform))
+  (i/transform cddb-transform-map
+               (cddb-parser cddb-example))
+  ;; Hard to read from inner forms to outer?
+  ;; Clojure has -> and ->>
+  (->> cddb-example
+       cddb-parser
+       (i/transform cddb-transform-map)))
+
 
 
 ;;; PGN Chess
 ;; http://www.thechessdrum.net/PGN_Reference.txt
 
-;; Example data
+
+
+;;; Example data
 (def magnus-carlsen-pgn 
   (slurp "resources/data/carlsen.pgn"))
 
+(comment
+  (print magnus-carlsen-pgn))
+
+
+;;; A PGN Grammar
 ;; Gloss over some details of the grammar of a move.  
 ;; See e.g.
 ;; http://pyparsing.wikispaces.com/file/view/pgn.py/30112820/pgn.py
@@ -251,7 +271,7 @@ Unknown   = <'*'>
 <QU> = <'\"'>")
 
 
-;; Instaparse supports a second output method: enlive.
+;;; Instaparse supports a second output method: enlive.
 ;; So far we've used hiccup.
 ;; Both are common tree structures in the Clojure world.
 (defn read-pgn-database []
@@ -273,12 +293,13 @@ Unknown   = <'*'>
 ;; Or use the shell: xmlindent /tmp/pgn.xml | less
 
 
+;;; All that was pretty staic...
 
 
 ;;; Last Example: Apache
 
-;; Reduced Apache log with just two fields: IP, timestamp
-;; Would read a sequence of lines from a file with line-seq
+;;; Reduced Apache log with just two fields: IP, timestamp
+;; Would read a sequence of lines from a file with e.g. line-seq
 ;; This kind of file is too large for Instaparse
 ;; Just parse each line with Instaparse
 ;; Pretend to have a line-seq with a vector here
@@ -303,13 +324,16 @@ Unknown   = <'*'>
    date  = #'\\d+/\\w+/\\d+'
    time  = #'\\d+:\\d+:\\d+'
    tz    = #'[+-]\\d+'")
+
 (comment
   ((i/parser grammar-date) "[22/Jul/2014:14:01:08 +0200]"))
 
-;; Now leverage the combinator library of Instaparse
+
+
+;;; Now leverage the combinator library of Instaparse
 ;;   instaparse.combinators
 ;; Use ebnf to translate a EBNF grammar into a tree structure
-(comment 
+(comment
   (c/ebnf grammar-ip))
 
 ;; Result of ebnf is just a hash map
@@ -331,8 +355,12 @@ Unknown   = <'*'>
 
 
 
-;;; Can't We Build This Dynamically? I hear you say?
-;; Sure we can
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; Can't We Build This Dynamically? I hear you scream?
+;; Sure we can!
+
+;; Chant the mantra "Parser zur Laufzeit"
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 
 ;;; Build a Logfile Parser From The Log Definition
@@ -357,10 +385,17 @@ Unknown   = <'*'>
 (comment 
   (parse-format-def apache-log-def))
 ;; Our plan is to translate this into a grammar which can parse a
-;; line of log output.
-;; Need to create the grammar for the line and add all required NT.
+;; line of log output.  Just like combined above but programmatically
+;; at runtime,
+;; So, we need to create the grammar for the line and add all required
+;; NT.
 
-;; Multi Method with first as dispatch function
+
+;; We could go with a huge if/switch/case, but...
+
+
+;;; Multi Method with first as dispatch function
+;; (I'll assume you know what multi methods do.)
 (defmulti log-decl->grammar first)
 
 (defmethod log-decl->grammar :ip 
