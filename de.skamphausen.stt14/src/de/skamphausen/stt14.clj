@@ -1,9 +1,7 @@
 (ns de.skamphausen.stt14
-  (:require [instaparse.core  :as i]
+  (:require [instaparse.core        :as i]
             [instaparse.combinators :as c]
-            [clojure.java.io  :as io]
-            [clojure.xml      :as xml]
-            [clojure.string   :as s]))
+            [clojure.xml            :as xml]))
 
 ;;; Parsing
 
@@ -175,7 +173,7 @@
   (test-cddb-parser cddb-grammar-clean))
 
 ;; Save a parser for later
-(def cddb-parser 
+(def cddb-parser
   (i/parser cddb-grammar-clean))
 
 ;;; Transform
@@ -293,7 +291,7 @@ Unknown   = <'*'>
 ;; Or use the shell: xmlindent /tmp/pgn.xml | less
 
 
-;;; All that was pretty staic...
+;;; All that was pretty static...
 
 
 ;;; Last Example: Apache
