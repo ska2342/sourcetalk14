@@ -8,6 +8,7 @@
                                  2014 
                               Göttingen
                           Stefan Kamphausen
+                               Acrolinx
    " 
   :url "https://github.com/ska2342/sourcetalk14" 
   :license {:name "Eclipse Public License" 
